@@ -108,6 +108,41 @@
       white-space: nowrap;
     }
     
+    .clock-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 10px 16px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      min-width: 200px;
+    }
+    
+    .clock {
+      font-size: 28px;
+      font-weight: 700;
+      color: white;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 2px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      line-height: 1;
+    }
+    
+    .date {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 500;
+      text-align: right;
+    }
+    
+    .data-info {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.8);
+      text-align: right;
+    }
+    
     .card {
       background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
       border: 1px solid var(--card-border);
@@ -271,8 +306,16 @@
         height: 55px;
       }
       
-      header .meta {
-        font-size: 14px;
+      .clock {
+        font-size: 32px;
+      }
+      
+      .date {
+        font-size: 15px;
+      }
+      
+      .data-info {
+        font-size: 12px;
       }
       
       .label {
@@ -360,14 +403,18 @@
     <header>
       <div class="header-left">
         <div class="logo-container">
-          <img src="https://distan.makassarkota.go.id/images/Logo%20Dinas%20Pertanahan.png" alt="Logo Dinas Pertanahan" class="logo">
+          <img src="https://makassarkota.go.id/wp-content/uploads/2024/02/logo-makassarkota-768x963.png" alt="Logo Kota Makassar" class="logo" onerror="this.src='https://distan.makassarkota.go.id/images/Logo%20Dinas%20Pertanahan.png'">
         </div>
         <div class="header-text">
           <h1>Agenda Dinas Pertanahan</h1>
           <p class="subtitle">Kota Makassar</p>
         </div>
       </div>
-      <div class="meta" id="metaInfo">Memuat data…</div>
+      <div class="clock-container">
+        <div class="clock" id="clock">00:00:00</div>
+        <div class="date" id="date">Loading...</div>
+        <div class="data-info" id="metaInfo">Memuat data…</div>
+      </div>
     </header>
 
     <section class="card" id="card" aria-live="polite" aria-busy="true">
@@ -388,6 +435,35 @@
   </div>
 
   <script>
+    // ====== CLOCK & DATE ======
+    function updateClock() {
+      const now = new Date();
+      
+      // Format waktu: HH:MM:SS
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const timeString = `${hours}:${minutes}:${seconds}`;
+      
+      // Format tanggal: Hari, DD Bulan YYYY
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
+                      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      
+      const dayName = days[now.getDay()];
+      const date = now.getDate();
+      const month = months[now.getMonth()];
+      const year = now.getFullYear();
+      const dateString = `${dayName}, ${date} ${month} ${year}`;
+      
+      document.getElementById('clock').textContent = timeString;
+      document.getElementById('date').textContent = dateString;
+    }
+    
+    // Update clock setiap detik
+    updateClock();
+    setInterval(updateClock, 1000);
+    
     // ====== KONFIGURASI ======
     // API Sheetbest URL
     const API_URL = 'https://api.sheetbest.com/sheets/d0cf27a2-ef13-485c-8fb0-ed8db045f11f';
@@ -398,7 +474,7 @@
     // ====== FETCH + TRANSFORM ======
     async function loadAgendas() {
       const metaInfo = document.getElementById('metaInfo');
-      metaInfo.textContent = 'Mengambil data dari Sheetbest API…';
+      metaInfo.textContent = 'Mengambil data...';
 
       let resp;
       try {
@@ -441,7 +517,7 @@
         return values.length > 0;
       });
 
-      metaInfo.textContent = `Memuat ${agendas.length} agenda • sumber: Sheetbest API`;
+      metaInfo.textContent = `${agendas.length} agenda`;
       return agendas;
     }
 
