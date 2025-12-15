@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Agenda Dinas Pertanahan Kota Makassar</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22c55e;
+      --danger: #ef4444;
+      --button: #1f2937;
+      --button-hover: #374151;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+    }
+    .app {
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 16px;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    header h1 {
+      font-size: 20px;
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    header .meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .label {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .value {
+      font-size: 16px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .value strong {
+      color: var(--text);
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .left-controls, .right-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn {
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: var(--button);
+      border: 1px solid #2b3441;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      transition: background .15s ease, transform .04s ease;
+      user-select: none;
+    }
+    .btn:hover { background: var(--button-hover); }
+    .btn:active { transform: translateY(1px); }
+    .badge {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 6px 10px;
+      border: 1px dashed #2b3441;
+      border-radius: 8px;
+    }
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .error {
+      color: var(--danger);
+      font-size: 14px;
+    }
+    .hidden { display: none !important; }
+
+    @media (max-width: 640px) {
+      .row { grid-template-columns: 1fr; }
+      header { flex-direction: column; align-items: flex-start; gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <h1>Agenda Dinas Pertanahan</h1>
+      <div class="meta" id="metaInfo">Memuat data…</div>
+    </header>
+
+    <section class="card" id="card" aria-live="polite" aria-busy="true">
+      <!-- Konten agenda dirender via JS -->
+    </section>
+
+    <div class="controls">
+      <div class="left-controls">
+        <button class="btn" id="prevBtn" aria-label="Agenda sebelumnya">‹ Prev</button>
+        <button class="btn" id="nextBtn" aria-label="Agenda berikutnya">Next ›</button>
+        <span class="badge" id="counter">0 / 0</span>
+      </div>
+      <div class="right-controls">
+        <button class="btn" id="toggleAutoBtn">⏸️ Pause</button>
+        <span class="status" id="status">Auto-advance 8 dtk</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== KONFIGURASI ======
+    // Ganti 'GID' jika tab yang dipublish bukan gid=0.
+    const SHEET_PUB_BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRy1hK_ctxsBHWwm-8fnvp2SvinUSVVXwnj5ffHhx-LpGWGAHwTlGBI0hMBVSqap9MbZ9LcoYQqczLw/pub';
+    const GID = '0';
+    const DIRECT_CSV_URL = `${SHEET_PUB_BASE}?gid=${GID}&single=true&output=csv`;
+    
+    // Gunakan proxy CORS untuk mengatasi blokir
+    const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+    const CSV_URL = CORS_PROXY + encodeURIComponent(DIRECT_CSV_URL);
+
+    // Interval auto-advance dalam milidetik
+    const SLIDE_INTERVAL = 8000;
+
+    // Normalisasi nama kolom agar tahan variasi kapitalisasi/spasi/tanda baca
+    const normalize = s => (s || '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[._-]/g, ' ')
+      .replace(/ +/g, ' ')
+      .normalize('NFKC');
+
+    // Nama-nama kolom yang diharapkan
+    const REQUIRED_HEADERS = [
+      'no',
+      'hari tanggal',
+      'no surat',
+      'pengirim',
+      'uraian',
+      'disposisi',
+      'rekomendasi tindak lanjut',
+      'tanggal tindak lanjut',
+      'keterangan'
+    ];
+
+    // ====== UTIL: CSV Parser Sederhana (dukungan kutip ganda) ======
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let cur = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        const next = text[i + 1];
+
+        if (inQuotes) {
+          if (c === '"' && next === '"') {
+            cur += '"'; i++; // escaped quote
+          } else if (c === '"') {
+            inQuotes = false;
+          } else {
+            cur += c;
+          }
+        } else {
+          if (c === '"') {
+            inQuotes = true;
+          } else if (c === ',') {
+            row.push(cur); cur = '';
+          } else if (c === '\n') {
+            row.push(cur); cur = '';
+            rows.push(row); row = [];
+          } else if (c === '\r') {
+            // ignore CR (normalize CRLF)
+          } else {
+            cur += c;
+          }
+        }
+      }
+      // trailing value
+      if (cur.length > 0 || inQuotes || row.length > 0) {
+        row.push(cur);
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    // ====== FETCH + TRANSFORM ======
+    async function loadAgendas() {
+      const metaInfo = document.getElementById('metaInfo');
+      metaInfo.textContent = 'Mengambil data dari Google Sheets…';
+
+      let resp;
+      try {
+        resp = await fetch(CSV_URL);
+      } catch (e) {
+        throw new Error('Gagal menghubungi Google Sheets via proxy.');
+      }
+      if (!resp.ok) {
+        throw new Error('HTTP ' + resp.status + ' saat mengambil CSV.');
+      }
+      const csvText = await resp.text();
+      const rows = parseCSV(csvText);
+
+      if (!rows.length) throw new Error('CSV kosong.');
+      const headersRaw = rows[0].map(normalize);
+
+      // Pemetaan header -> index
+      const indexMap = {};
+      headersRaw.forEach((h, idx) => indexMap[h] = idx);
+
+      // Validasi minimal kolom wajib ada
+      const missing = REQUIRED_HEADERS.filter(h => !(h in indexMap));
+      if (missing.length) {
+        console.warn('Header tidak ditemukan:', missing);
+        // tetap lanjut jika sebagian besar ada
+      }
+
+      // Transformasi rows menjadi objek agenda
+      const agendas = rows.slice(1).map((cols, i) => {
+        const pick = (name) => {
+          const idx = indexMap[name];
+          return (idx == null) ? '' : (cols[idx] ?? '').toString().trim();
+        };
+        return {
+          no: pick('no'),
+          hariTanggal: pick('hari tanggal'),
+          noSurat: pick('no surat'),
+          pengirim: pick('pengirim'),
+          uraian: pick('uraian'),
+          disposisi: pick('disposisi'),
+          rekomendasi: pick('rekomendasi tindak lanjut'),
+          tglTindakLanjut: pick('tanggal tindak lanjut'),
+          keterangan: pick('keterangan'),
+          _row: i + 2 // untuk debug (baris di sheet)
+        };
+      }).filter(a => {
+        // Singkirkan baris kosong
+        const values = Object.values(a).join('').trim();
+        return values.length > 0;
+      });
+
+      metaInfo.textContent = `Memuat ${agendas.length} agenda • sumber: Google Sheets`;
+      return agendas;
+    }
+
+    // ====== RENDER ======
+    function renderAgenda(container, agenda) {
+      container.innerHTML = `
+        <div class="row"><div class="label">No</div><div class="value">${escapeHtml(agenda.no || '-')}</div></div>
+        <div class="row"><div class="label">Hari/Tanggal</div><div class="value">${escapeHtml(agenda.hariTanggal || '-')}</div></div>
+        <div class="row"><div class="label">No. Surat</div><div class="value"><strong>${escapeHtml(agenda.noSurat || '-')}</strong></div></div>
+        <div class="row"><div class="label">Pengirim</div><div class="value">${escapeHtml(agenda.pengirim || '-')}</div></div>
+        <div class="row"><div class="label">Uraian</div><div class="value">${escapeHtml(agenda.uraian || '-')}</div></div>
+        <div class="row"><div class="label">Disposisi</div><div class="value">${escapeHtml(agenda.disposisi || '-')}</div></div>
+        <div class="row"><div class="label">Rekomendasi Tindak Lanjut</div><div class="value">${escapeHtml(agenda.rekomendasi || '-')}</div></div>
+        <div class="row"><div class="label">Tanggal Tindak Lanjut</div><div class="value">${escapeHtml(agenda.tglTindakLanjut || '-')}</div></div>
+        <div class="row"><div class="label">Keterangan</div><div class="value">${escapeHtml(agenda.keterangan || '-')}</div></div>
+      `;
+    }
+
+    function escapeHtml(str) {
+      return (str || '').toString()
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    // ====== SLIDES ======
+    const state = {
+      agendas: [],
+      index: 0,
+      timer: null,
+      auto: true,
+    };
+
+    function updateCounter() {
+      const el = document.getElementById('counter');
+      el.textContent = `${state.agendas.length ? state.index + 1 : 0} / ${state.agendas.length}`;
+    }
+
+    function show(indexDelta = 0) {
+      if (!state.agendas.length) return;
+      state.index = (state.index + indexDelta + state.agendas.length) % state.agendas.length;
+      renderAgenda(document.getElementById('card'), state.agendas[state.index]);
+      updateCounter();
+    }
+
+    function startAuto() {
+      stopAuto();
+      state.auto = true;
+      document.getElementById('toggleAutoBtn').textContent = '⏸️ Pause';
+      document.getElementById('status').textContent = `Auto-advance ${SLIDE_INTERVAL/1000} dtk`;
+      state.timer = setInterval(() => show(1), SLIDE_INTERVAL);
+    }
+
+    function stopAuto() {
+      state.auto = false;
+      document.getElementById('toggleAutoBtn').textContent = '▶️ Play';
+      document.getElementById('status').textContent = 'Manual';
+      if (state.timer) {
+        clearInterval(state.timer);
+        state.timer = null;
+      }
+    }
+
+    // ====== INIT ======
+    (async function init() {
+      const card = document.getElementById('card');
+      card.setAttribute('aria-busy', 'true');
+
+      try {
+        const agendas = await loadAgendas();
+
+        // Jika kolom "No" kosong, isi otomatis
+        agendas.forEach((a, i) => { if (!a.no) a.no = String(i + 1); });
+
+        state.agendas = agendas;
+        state.index = 0;
+
+        if (!agendas.length) {
+          card.innerHTML = `<div class="error">Tidak ada data agenda yang dapat ditampilkan.</div>`;
+          document.getElementById('counter').textContent = '0 / 0';
+          stopAuto();
+          return;
+        }
+
+        renderAgenda(card, agendas[0]);
+        updateCounter();
+        startAuto();
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('metaInfo').textContent = 'Gagal memuat data';
+        document.getElementById('card').innerHTML = `
+          <div class="error">
+            Terjadi kesalahan saat memuat: ${escapeHtml(err.message)}<br/>
+            Pastikan link "Publish to the web" aktif dan coba lagi.
+          </div>
+          <div class="status" style="margin-top:8px">
+            Jika tetap gagal, ubah URL menjadi CSV: <code>${escapeHtml(SHEET_PUB_BASE)}?gid=${escapeHtml(GID)}&single=true&output=csv</code>
+          </div>
+        `;
+        stopAuto();
+      } finally {
+        card.removeAttribute('aria-busy');
+      }
+
+      // Kontrol
+      document.getElementById('prevBtn').addEventListener('click', () => {
+        show(-1);
+        if (state.auto) startAuto(); // reset timer
+      });
+      document.getElementById('nextBtn').addEventListener('click', () => {
+        show(1);
+        if (state.auto) startAuto(); // reset timer
+      });
+      document.getElementById('toggleAutoBtn').addEventListener('click', () => {
+        if (state.auto) stopAuto(); else startAuto();
+      });
+
+      // Pause auto saat mouse di atas kartu
+      document.getElementById('card').addEventListener('mouseenter', () => { if (state.auto) stopAuto(); });
+      document.getElementById('card').addEventListener('mouseleave', () => { if (!state.auto) startAuto(); });
+    })();
+  </script>
+</body>
+</html>
