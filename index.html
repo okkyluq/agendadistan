@@ -126,7 +126,7 @@
 <body>
   <div class="app" id="app">
     <header>
-      <h1>Agenda Dinas Pertanahan</h1>
+      <h1>Agenda Dinas Pertanahan Kota Makassar</h1>
       <div class="meta" id="metaInfo">Memuat data…</div>
     </header>
 
@@ -159,7 +159,7 @@
     const CSV_URL = CORS_PROXY + encodeURIComponent(DIRECT_CSV_URL);
 
     // Interval auto-advance dalam milidetik
-    const SLIDE_INTERVAL = 8000;
+    const SLIDE_INTERVAL = 180000;
 
     // Normalisasi nama kolom agar tahan variasi kapitalisasi/spasi/tanda baca
     const normalize = s => (s || '')
@@ -173,15 +173,15 @@
 
     // Nama-nama kolom yang diharapkan
     const REQUIRED_HEADERS = [
-      'no',
-      'hari tanggal',
-      'no surat',
-      'pengirim',
-      'uraian',
-      'disposisi',
-      'rekomendasi tindak lanjut',
-      'tanggal tindak lanjut',
-      'keterangan'
+      "no",
+      "hari tanggal",
+      "no surat",
+      "pengirim",
+      "uraian",
+      "disposisi",
+      "rekomendasi tindak lanjut",
+      "tanggal tindak lanjut",
+      "keterangan"
     ];
 
     // ====== UTIL: CSV Parser Sederhana (dukungan kutip ganda) ======
@@ -259,20 +259,21 @@
 
       // Transformasi rows menjadi objek agenda
       const agendas = rows.slice(1).map((cols, i) => {
+        console.log(cols)
         const pick = (name) => {
           const idx = indexMap[name];
           return (idx == null) ? '' : (cols[idx] ?? '').toString().trim();
         };
         return {
-          no: pick('no'),
-          hariTanggal: pick('hari tanggal'),
-          noSurat: pick('no surat'),
-          pengirim: pick('pengirim'),
-          uraian: pick('uraian'),
-          disposisi: pick('disposisi'),
-          rekomendasi: pick('rekomendasi tindak lanjut'),
-          tglTindakLanjut: pick('tanggal tindak lanjut'),
-          keterangan: pick('keterangan'),
+          no: cols[0],
+          hariTanggal: cols[1],
+          noSurat: cols[2],
+          pengirim: cols[3],
+          uraian: cols[4],
+          disposisi: cols[5],
+          rekomendasi: cols[6],
+          tglTindakLanjut: cols[7],
+          keterangan: cols[8],
           _row: i + 2 // untuk debug (baris di sheet)
         };
       }).filter(a => {
